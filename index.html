@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đua Xe 2D - Di Chuyển 4 Hướng</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: linear-gradient(to bottom, #1e3a8a, #60a5fa);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: 'Inter', sans-serif;
+    }
+    canvas {
+      border: 2px solid #1e40af;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      background-color: #111827;
+    }
+    #startScreen, #gameOver {
+      position: absolute;
+      background: rgba(17, 24, 39, 0.9);
+      border-radius: 12px;
+      color: white;
+      padding: 2rem;
+      text-align: center;
+      animation: fadeIn 0.5s ease-in;
+    }
+    #startScreen {
+      display: block;
+    }
+    #gameOver {
+      display: none;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.8); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    #startBtn, #restartBtn {
+      transition: all 0.3s ease;
+    }
+    #startBtn:hover, #restartBtn:hover {
+      transform: scale(1.05);
+      background-color: #2563eb;
+    }
+  </style>
+</head>
+<body class="text-white">
+  <div class="max-w-md mx-auto text-center p-4">
+    <h1 class="text-4xl font-bold mb-2">Đua Xe 2D</h1>
+    <p class="text-lg mb-4">Dùng <span class="font-semibold">mũi tên trái/phải/lên/xuống</span> để điều khiển xe, tránh chướng ngại vật!</p>
+  </div>
+  <canvas id="gameCanvas" width="400" height="600" class="mb-4"></canvas>
+  <div id="startScreen" class="max-w-sm">
+    <h2 class="text-3xl font-bold mb-4">Chào mừng đến với Đua Xe 2D!</h2>
+    <p class="text-lg mb-4">Nhấn nút để bắt đầu cuộc đua!</p>
+    <button id="startBtn" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold">Bắt đầu</button>
+  </div>
+  <div id="gameOver" class="max-w-sm">
+    <h2 class="text-3xl font-bold mb-4">Game Over!</h2>
+    <p class="text-xl mb-2">Điểm: <span id="finalScore" class="font-semibold"></span></p>
+    <p class="text-xl mb-4">Điểm cao nhất: <span id="highScore" class="font-semibold"></span></p>
+    <button id="restartBtn" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold">Chơi lại</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('startScreen');
+    const gameOverScreen = document.getElementById('gameOver');
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const finalScoreDisplay = document.getElementById('finalScore');
+    const highScoreDisplay = document.getElementById('highScore');
+
+    // Trạng thái trò chơi
+    let player = { x: 180, y: 500, width: 40, height: 60 };
+    let obstacles = [];
+    let score = 0;
+    let highScore = localStorage.getItem('highScore') || 0;
+    let gameOver = false;
+    let gameStarted = false;
+    let speed = 2; // Bắt đầu chậm
+    let shake = 0;
+
+    // Điều khiển
+    let keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false };
+    document.addEventListener('keydown', (e) => {
+      if (e.key in keys) keys[e.key] = true;
+    });
+    document.addEventListener('keyup', (e) => {
+      if (e.key in keys) keys[e.key] = false;
+    });
+
+    // Tạo chướng ngại vật
+    function spawnObstacle() {
+      let x = Math.random() * (canvas.width - 40);
+      obstacles.push({ x: x, y: -60, width: 40, height: 60 });
+    }
+
+    // Kiểm tra va chạm
+    function checkCollision() {
+      for (let obs of obstacles) {
+        if (
+          player.x < obs.x + obs.width &&
+          player.x + player.width > obs.x &&
+          player.y < obs.y + obs.height &&
+          player.y + player.height > obs.y
+        ) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Vẽ xe
+    function drawCar(x, y, width, height, isPlayer) {
+      const gradient = ctx.createLinearGradient(x, y, x, y + height);
+      if (isPlayer) {
+        gradient.addColorStop(0, '#dc2626');
+        gradient.addColorStop(1, '#b91c1c');
+      } else {
+        gradient.addColorStop(0, '#1d4ed8');
+        gradient.addColorStop(1, '#1e40af');
+      }
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(x + width * 0.1, y + height);
+      ctx.lineTo(x + width * 0.1, y + height * 0.3);
+      ctx.quadraticCurveTo(x + width * 0.1, y, x + width * 0.3, y);
+      ctx.lineTo(x + width * 0.7, y);
+      ctx.quadraticCurveTo(x + width * 0.9, y, x + width * 0.9, y + height * 0.3);
+      ctx.lineTo(x + width * 0.9, y + height);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = isPlayer ? '#60a5fa' : '#93c5fd';
+      ctx.fillRect(x + width * 0.25, y + height * 0.15, width * 0.5, height * 0.2);
+
+      ctx.fillStyle = '#1f2937';
+      ctx.beginPath();
+      ctx.arc(x + width * 0.2, y + height * 0.85, width * 0.1, 0, Math.PI * 2);
+      ctx.arc(x + width * 0.8, y + height * 0.85, width * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (isPlayer) {
+        ctx.fillStyle = '#fef3c7';
+        ctx.beginPath();
+        ctx.moveTo(x + width * 0.3, y);
+        ctx.lineTo(x + width * 0.3, y - 10);
+        ctx.lineTo(x + width * 0.4, y - 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(x + width * 0.7, y);
+        ctx.lineTo(x + width * 0.7, y - 10);
+        ctx.lineTo(x + width * 0.6, y - 10);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.fillRect(x, y + height, width, 5);
+    }
+
+    // Vẽ đường
+    let roadOffset = 0;
+    function drawRoad() {
+      ctx.fillStyle = '#4b5563';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(0, 0, 50, canvas.height);
+      ctx.fillRect(canvas.width - 50, 0, 50, canvas.height);
+      ctx.fillStyle = 'white';
+      for (let i = -40; i < canvas.height; i += 40) {
+        ctx.fillRect(canvas.width / 2 - 5, (i + roadOffset) % canvas.height, 10, 20);
+      }
+      roadOffset = (roadOffset + speed) % 40;
+    }
+
+    // Cập nhật trò chơi
+    function update() {
+      if (!gameStarted || gameOver) return;
+
+      // Di chuyển xe người chơi (thêm lên/xuống)
+      if (keys.ArrowLeft && player.x > 50) player.x -= 5;
+      if (keys.ArrowRight && player.x < canvas.width - player.width - 50) player.x += 5;
+      if (keys.ArrowUp && player.y > 50) player.y -= 5;
+      if (keys.ArrowDown && player.y < canvas.height - player.height - 50) player.y += 5;
+
+      // Di chuyển chướng ngại vật
+      for (let obs of obstacles) {
+        obs.y += speed;
+      }
+      obstacles = obstacles.filter(obs => obs.y < canvas.height);
+
+      // Tạo chướng ngại vật mới
+      if (Math.random() < 0.01) spawnObstacle();
+
+      // Tăng điểm
+      score += 0.1;
+
+      // Tăng tốc độ
+      if (speed < 8) speed += 0.001;
+
+      // Hiệu ứng rung
+      shake = Math.sin(Date.now() * 0.01) * 2;
+
+      // Kiểm tra va chạm
+      if (checkCollision()) {
+        gameOver = true;
+        if (score > highScore) {
+          highScore = score;
+          localStorage.setItem('highScore', highScore);
+        }
+        finalScoreDisplay.textContent = Math.floor(score);
+        highScoreDisplay.textContent = Math.floor(highScore);
+        gameOverScreen.style.display = 'block';
+        startScreen.style.display = 'block';
+      }
+    }
+
+    // Vẽ trò chơi
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawRoad();
+      if (gameStarted) {
+        drawCar(player.x + shake, player.y, player.width, player.height, true);
+        for (let obs of obstacles) {
+          drawCar(obs.x, obs.y, obs.width, obs.height, false);
+        }
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 20px Inter';
+        ctx.fillText(`Điểm: ${Math.floor(score)}`, 60, 30);
+        ctx.fillText(`Cao nhất: ${Math.floor(highScore)}`, 60, 60);
+      }
+    }
+
+    // Vòng lặp trò chơi
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Khởi động trò chơi
+    gameLoop();
+
+    // Bắt đầu trò chơi
+    startBtn.addEventListener('click', () => {
+      gameStarted = true;
+      startScreen.style.display = 'none';
+      spawnObstacle();
+    });
+
+    // Chơi lại
+    restartBtn.addEventListener('click', () => {
+      gameOver = false;
+      gameStarted = false;
+      score = 0;
+      speed = 2;
+      obstacles = [];
+      player.x = 180;
+      player.y = 500;
+      gameOverScreen.style.display = 'none';
+    });
+  </script>
+</body>
+</html>
